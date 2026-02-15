@@ -1,7 +1,7 @@
 ---
 type: system_spec
 status: draft
-category: automation
+category: execution
 risk_level: high
 created: 2026-02-15
 requires_approval: true
@@ -12,257 +12,220 @@ version: 1.0.0
 
 ## Overview
 
-An autonomous execution loop that continuously processes tasks until completion, with configurable stop conditions, failure handling, state persistence, and human intervention hooks.
+An autonomous execution loop that continuously works on tasks until completion, with configurable stop conditions, failure handling, and state persistence. Enables the AI Employee to work independently on complex tasks with minimal human intervention.
 
 ## Purpose
 
 Enable the Personal AI Employee to:
 - Execute tasks autonomously until completion
-- Stop when task moved to /Done/
-- Respect maximum iteration limits
-- Handle failures gracefully with thresholds
-- Allow human intervention via stop hooks
-- Reinject prompts for continuation
+- Loop continuously with configurable stop conditions
+- Handle failures gracefully with retry logic
 - Persist state across interruptions
+- Allow human intervention via stop hooks
+- Reinject prompts for continued execution
+- Track progress and iterations
 
 ## Loop Termination Conditions
 
-### 1. Success Condition
-**Trigger**: Task file moved to /Done/  
-**Action**: Stop loop, log success, clean up state
+### 1. Task Moved to Done
+**Trigger**: Task file moved from any folder to `/Done/`  
+**Behavior**: Loop completes successfully  
+**Action**: Archive state, log completion
 
-### 2. Max Iterations
-**Trigger**: Iteration count >= max_iterations  
-**Action**: Stop loop, create escalation, preserve state
+### 2. Max Iterations Reached
+**Trigger**: Iteration count exceeds configured maximum  
+**Behavior**: Loop stops with warning  
+**Action**: Save state, create intervention request
 
-### 3. Failure Threshold
-**Trigger**: Consecutive failures >= failure_threshold  
-**Action**: Stop loop, create error report, request human help
+### 3. Failure Threshold Exceeded
+**Trigger**: Consecutive failures exceed threshold  
+**Behavior**: Loop stops with error  
+**Action**: Save state, escalate to human
 
-### 4. Stop Hook
-**Trigger**: Stop file created by human  
-**Action**: Graceful shutdown, save state, await instructions
+### 4. Stop Hook Triggered
+**Trigger**: Human creates stop file or hook  
+**Behavior**: Loop stops gracefully  
+**Action**: Save state, wait for resume
 
-### 5. Manual Completion
-**Trigger**: Human marks task as complete  
-**Action**: Stop loop, archive state, log completion
+### 5. Manual Intervention
+**Trigger**: Human moves task to `/Needs_Action/`  
+**Behavior**: Loop pauses for human input  
+**Action**: Save state, wait for guidance
 
 ## Architecture
 
-### Autonomous Loop Flow
-
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  AUTONOMOUS LOOP START                       │
-├─────────────────────────────────────────────────────────────┤
-│  Input: Task file path, Configuration                       │
-│  Initialize: State file, iteration counter, failure counter │
+│                  AUTONOMOUS LOOP                             │
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  INITIALIZATION                                         │ │
+│  │  - Load state file                                      │ │
+│  │  - Read task configuration                              │ │
+│  │  - Set up stop hooks                                    │ │
+│  │  - Initialize counters                                  │ │
+│  └────────────────────────────────────────────────────────┘ │
+│                          ↓                                   │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  LOOP ITERATION (Repeat)                               │ │
+│  │                                                         │ │
+│  │  1. Check stop conditions                              │ │
+│  │  2. Execute task step                                   │ │
+│  │  3. Update state file                                   │ │
+│  │  4. Check completion                                    │ │
+│  │  5. Handle failures                                     │ │
+│  │  6. Increment iteration                                 │ │
+│  │  7. Reinject prompt (if needed)                        │ │
+│  └────────────────────────────────────────────────────────┘ │
+│                          ↓                                   │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  TERMINATION                                            │ │
+│  │  - Save final state                                     │ │
+│  │  - Log completion/failure                               │ │
+│  │  - Archive or escalate                                  │ │
+│  │  - Clean up resources                                   │ │
+│  └────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
-                          ↓
-                   ┌──────────────┐
-                   │ Load State   │
-                   └──────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────────┐
-│                    LOOP ITERATION                            │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  1. Check Stop Conditions                                   │
-│     ├─ Task in /Done/? → EXIT SUCCESS                      │
-│     ├─ Max iterations? → EXIT MAX_ITERATIONS                │
-│     ├─ Failure threshold? → EXIT FAILURE                    │
-│     └─ Stop hook exists? → EXIT STOPPED                     │
-│                                                              │
-│  2. Execute Task Step                                        │
-│     ├─ Read current task state                             │
-│     ├─ Determine next action                               │
-│     ├─ Execute action via Ralph Loop                        │
-│     └─ Update task state                                    │
-│                                                              │
-│  3. Handle Result                                            │
-│     ├─ Success → Reset failure counter                      │
-│     ├─ Failure → Increment failure counter                  │
-│     └─ Partial → Continue                                   │
-│                                                              │
-│  4. Update State                                             │
-│     ├─ Increment iteration counter                          │
-│     ├─ Save state to file                                   │
-│     ├─ Log iteration result                                 │
-│     └─ Check for prompt reinjection                         │
-│                                                              │
-│  5. Wait Interval                                            │
-│     └─ Sleep before next iteration                          │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-                          ↓
-                   Loop back to Step 1
-                          ↓
-                   ┌──────────────┐
-                   │  EXIT LOOP   │
-                   └──────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────────┐
-│                    CLEANUP & FINALIZE                        │
-├─────────────────────────────────────────────────────────────┤
-│  1. Save final state                                        │
-│  2. Generate completion report                              │
-│  3. Archive logs                                            │
-│  4. Notify human (if needed)                                │
-│  5. Clean up resources                                      │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Configuration
-
-### Loop Configuration File
-
-```yaml
-# /Control/autonomous_loop_config.yaml
-
-autonomous_loop:
-  # Stop conditions
-  max_iterations: 100
-  failure_threshold: 3
-  timeout_minutes: 120
-  
-  # Iteration settings
-  iteration_interval_seconds: 5
-  backoff_on_failure: true
-  backoff_multiplier: 2
-  max_backoff_seconds: 60
-  
-  # State persistence
-  state_file: ".state/autonomous_loop_state.json"
-  save_state_every_n_iterations: 1
-  state_retention_days: 30
-  
-  # Stop hook
-  stop_hook_file: "/Control/STOP_AUTONOMOUS_LOOP"
-  check_stop_hook_every_iteration: true
-  
-  # Prompt reinjection
-  reinject_prompt_file: "/Control/reinject_prompt.md"
-  check_reinject_every_n_iterations: 5
-  
-  # Logging
-  log_file: "Logs/autonomous_loop.log"
-  log_level: "INFO"
-  log_every_iteration: true
-  
-  # Notifications
-  notify_on_completion: true
-  notify_on_failure: true
-  notify_on_max_iterations: true
 ```
 
 ## State File
 
 ### State File Format
 
+**Location**: `.state/autonomous_loop_[task_id].json`
+
 ```json
 {
-  "loop_id": "loop_20260215_103000",
+  "task_id": "task_20260215_103000",
   "task_path": "/Specs/auth_feature/tasks.md",
-  "task_id": "auth_feature",
-  "started_at": "2026-02-15T10:30:00Z",
-  "last_updated": "2026-02-15T10:35:00Z",
   "status": "running",
-  
-  "counters": {
-    "iterations": 5,
-    "max_iterations": 100,
-    "consecutive_failures": 0,
-    "failure_threshold": 3,
-    "total_successes": 4,
-    "total_failures": 1
+  "started_at": "2026-02-15T10:30:00Z",
+  "updated_at": "2026-02-15T10:35:00Z",
+  "iteration": 5,
+  "max_iterations": 100,
+  "consecutive_failures": 0,
+  "failure_threshold": 3,
+  "total_failures": 1,
+  "total_successes": 4,
+  "current_step": {
+    "step_id": "1.3",
+    "description": "Implement authentication logic",
+    "status": "in_progress",
+    "started_at": "2026-02-15T10:34:00Z"
   },
-  
-  "current_state": {
-    "current_task": "1.2 Implement authentication logic",
-    "last_action": "write_code",
-    "last_result": "success",
-    "next_action": "run_tests"
-  },
-  
-  "history": [
+  "completed_steps": [
     {
-      "iteration": 1,
-      "timestamp": "2026-02-15T10:30:05Z",
-      "action": "read_requirements",
-      "result": "success",
-      "duration_seconds": 2.3
+      "step_id": "1.1",
+      "description": "Set up project structure",
+      "completed_at": "2026-02-15T10:31:00Z",
+      "duration_seconds": 45
     },
     {
-      "iteration": 2,
-      "timestamp": "2026-02-15T10:30:10Z",
-      "action": "generate_code",
-      "result": "success",
-      "duration_seconds": 5.1
-    },
-    {
-      "iteration": 3,
-      "timestamp": "2026-02-15T10:30:20Z",
-      "action": "run_tests",
-      "result": "failure",
-      "error": "Test failed: authentication_test.ts",
-      "duration_seconds": 8.2
-    },
-    {
-      "iteration": 4,
-      "timestamp": "2026-02-15T10:30:30Z",
-      "action": "fix_code",
-      "result": "success",
-      "duration_seconds": 4.5
-    },
-    {
-      "iteration": 5,
-      "timestamp": "2026-02-15T10:30:40Z",
-      "action": "run_tests",
-      "result": "success",
-      "duration_seconds": 7.8
+      "step_id": "1.2",
+      "description": "Install dependencies",
+      "completed_at": "2026-02-15T10:33:00Z",
+      "duration_seconds": 120
     }
   ],
-  
-  "checkpoints": {
-    "last_successful_state": {
-      "iteration": 5,
-      "task": "1.2 Implement authentication logic",
-      "timestamp": "2026-02-15T10:30:40Z"
+  "failed_steps": [
+    {
+      "step_id": "1.3",
+      "description": "Implement authentication logic",
+      "failed_at": "2026-02-15T10:34:30Z",
+      "error": "Type error in auth.ts",
+      "retry_count": 1
+    }
+  ],
+  "context": {
+    "last_prompt": "Continue implementing authentication...",
+    "last_response": "I encountered a type error...",
+    "environment": {
+      "node_version": "18.0.0",
+      "typescript_version": "5.0.0"
     }
   },
-  
-  "metadata": {
-    "config_file": "/Control/autonomous_loop_config.yaml",
-    "ralph_loop_version": "2.0.0",
-    "started_by": "human",
-    "can_resume": true
+  "stop_conditions": {
+    "task_in_done": false,
+    "max_iterations_reached": false,
+    "failure_threshold_exceeded": false,
+    "stop_hook_triggered": false,
+    "manual_intervention": false
+  },
+  "metrics": {
+    "total_duration_seconds": 300,
+    "average_step_duration": 60,
+    "success_rate": 0.80
   }
 }
 ```
 
-### State File Location
+### State Persistence
 
-```
-.state/
-├── autonomous_loop_state.json          # Current state
-├── autonomous_loop_state_backup.json   # Previous state
-└── history/
-    ├── loop_20260215_103000.json      # Completed loop
-    ├── loop_20260214_150000.json      # Completed loop
-    └── loop_20260213_090000.json      # Completed loop
+```python
+class StateManager:
+    def __init__(self, task_id):
+        self.task_id = task_id
+        self.state_file = f".state/autonomous_loop_{task_id}.json"
+        self.state = self.load_state()
+    
+    def load_state(self):
+        """Load state from file or create new"""
+        if os.path.exists(self.state_file):
+            with open(self.state_file, 'r') as f:
+                return json.load(f)
+        else:
+            return self.create_initial_state()
+    
+    def save_state(self):
+        """Save current state to file"""
+        self.state['updated_at'] = datetime.now().isoformat()
+        
+        os.makedirs(os.path.dirname(self.state_file), exist_ok=True)
+        with open(self.state_file, 'w') as f:
+            json.dump(self.state, f, indent=2)
+    
+    def update_iteration(self):
+        """Increment iteration counter"""
+        self.state['iteration'] += 1
+        self.save_state()
+    
+    def record_success(self, step):
+        """Record successful step"""
+        self.state['total_successes'] += 1
+        self.state['consecutive_failures'] = 0
+        self.state['completed_steps'].append({
+            'step_id': step.id,
+            'description': step.description,
+            'completed_at': datetime.now().isoformat(),
+            'duration_seconds': step.duration
+        })
+        self.save_state()
+    
+    def record_failure(self, step, error):
+        """Record failed step"""
+        self.state['total_failures'] += 1
+        self.state['consecutive_failures'] += 1
+        self.state['failed_steps'].append({
+            'step_id': step.id,
+            'description': step.description,
+            'failed_at': datetime.now().isoformat(),
+            'error': str(error),
+            'retry_count': step.retry_count
+        })
+        self.save_state()
 ```
 
 ## Stop Hook
 
 ### Stop Hook File
 
-**Location**: `/Control/STOP_AUTONOMOUS_LOOP`
+**Location**: `.hooks/stop_autonomous_loop.md`
 
-**Format**:
 ```markdown
 ---
 type: stop_hook
-created: 2026-02-15T10:35:00Z
+task_id: task_20260215_103000
+created: 2026-02-15T10:40:00Z
 reason: manual
 ---
 
@@ -270,146 +233,654 @@ reason: manual
 
 ## Reason for Stopping
 
-[Explain why you're stopping the loop]
+[Human provides reason here]
 
 ## Current Status
 
-The loop will stop gracefully after the current iteration completes.
+**Iteration**: 5/100
+**Current Step**: 1.3 - Implement authentication logic
+**Success Rate**: 80%
 
-## Next Steps
+## What to Do
 
-After stopping:
-1. Review state file: `.state/autonomous_loop_state.json`
-2. Check logs: `Logs/autonomous_loop.log`
-3. Decide next action:
-   - Resume: Delete this file and restart loop
-   - Modify: Update task and restart
-   - Complete: Move task to /Done/
+- [ ] Review progress so far
+- [ ] Provide guidance for next steps
+- [ ] Resume loop
+- [ ] Cancel task
+
+## Resume Instructions
+
+To resume the loop:
+1. Delete this file
+2. Or move task back to active folder
+3. Loop will continue from saved state
 
 ---
 
-**To resume**: Delete this file
-**To abort**: Move task to /Rejected/
+**Loop is PAUSED until this file is deleted or task is moved.**
 ```
 
 ### Stop Hook Detection
 
 ```python
-def check_stop_hook(self):
-    """Check if stop hook file exists"""
+class StopHookDetector:
+    def __init__(self, task_id):
+        self.task_id = task_id
+        self.hook_file = f".hooks/stop_autonomous_loop_{task_id}.md"
     
-    stop_hook_path = self.config.stop_hook_file
+    def check_stop_hook(self):
+        """Check if stop hook exists"""
+        return os.path.exists(self.hook_file)
     
-    if os.path.exists(stop_hook_path):
-        # Read stop hook
-        with open(stop_hook_path, 'r') as f:
-            stop_hook = parse_markdown(f.read())
-        
-        logger.info("Stop hook detected", {
-            "reason": stop_hook.get("reason", "unknown"),
-            "created": stop_hook.get("created")
-        })
-        
-        # Save state
-        self.save_state("stopped")
-        
-        # Create stop report
-        self.create_stop_report(stop_hook)
-        
-        return True
+    def create_stop_hook(self, reason="manual"):
+        """Create stop hook file"""
+        content = f"""---
+type: stop_hook
+task_id: {self.task_id}
+created: {datetime.now().isoformat()}
+reason: {reason}
+---
+
+# Stop Autonomous Loop
+
+Loop has been stopped. Delete this file to resume.
+"""
+        os.makedirs(os.path.dirname(self.hook_file), exist_ok=True)
+        with open(self.hook_file, 'w') as f:
+            f.write(content)
     
-    return False
+    def remove_stop_hook(self):
+        """Remove stop hook to resume"""
+        if os.path.exists(self.hook_file):
+            os.remove(self.hook_file)
 ```
 
 ## Prompt Reinjection
 
-### Reinject Prompt File
+### Reinjection Strategy
 
-**Location**: `/Control/reinject_prompt.md`
+```python
+class PromptReinjector:
+    def __init__(self, state_manager):
+        self.state = state_manager
+    
+    def should_reinject(self, iteration):
+        """Determine if prompt reinjection needed"""
+        
+        # Reinject every 10 iterations
+        if iteration % 10 == 0:
+            return True
+        
+        # Reinject after failure
+        if self.state.state['consecutive_failures'] > 0:
+            return True
+        
+        # Reinject if context is stale
+        last_update = datetime.fromisoformat(
+            self.state.state['updated_at']
+        )
+        if (datetime.now() - last_update).seconds > 300:
+            return True
+        
+        return False
+    
+    def generate_reinjection_prompt(self):
+        """Generate prompt to reinject context"""
+        
+        state = self.state.state
+        
+        prompt = f"""
+# Task Continuation Context
 
-**Purpose**: Provide additional context or instructions mid-loop
+## Current Task
+**Task**: {state['task_path']}
+**Iteration**: {state['iteration']}/{state['max_iterations']}
+**Status**: {state['status']}
 
-**Format**:
-```markdown
+## Progress
+- **Completed Steps**: {len(state['completed_steps'])}
+- **Failed Steps**: {len(state['failed_steps'])}
+- **Success Rate**: {state['metrics']['success_rate']:.0%}
+
+## Current Step
+**Step**: {state['current_step']['step_id']}
+**Description**: {state['current_step']['description']}
+**Status**: {state['current_step']['status']}
+
+## Recent Context
+{state['context']['last_prompt']}
+
+## Last Response
+{state['context']['last_response']}
+
+## Next Action
+Continue working on the current step. If you encountered an error, 
+try a different approach. Remember to update the state file after 
+each step.
+
 ---
-type: reinject_prompt
-created: 2026-02-15T10:40:00Z
+
+Please continue from where you left off.
+"""
+        return prompt
+```
+
+
+## Loop Implementation
+
+```python
+class AutonomousLoop:
+    def __init__(self, task_id, config):
+        self.task_id = task_id
+        self.config = config
+        self.state = StateManager(task_id)
+        self.stop_hook = StopHookDetector(task_id)
+        self.reinjector = PromptReinjector(self.state)
+        self.running = False
+    
+    async def start(self):
+        """Start the autonomous loop"""
+        
+        logger.info(f"Starting autonomous loop for task {self.task_id}")
+        
+        self.running = True
+        self.state.state['status'] = 'running'
+        self.state.save_state()
+        
+        try:
+            while self.running:
+                # Check stop conditions
+                if self.should_stop():
+                    break
+                
+                # Execute iteration
+                await self.execute_iteration()
+                
+                # Update iteration counter
+                self.state.update_iteration()
+                
+                # Brief pause between iterations
+                await asyncio.sleep(1)
+            
+            # Loop completed
+            await self.handle_completion()
+            
+        except Exception as e:
+            logger.error(f"Loop error: {e}")
+            await self.handle_error(e)
+        
+        finally:
+            self.state.state['status'] = 'stopped'
+            self.state.save_state()
+    
+    def should_stop(self):
+        """Check if loop should stop"""
+        
+        # Check task moved to Done
+        if self.check_task_in_done():
+            logger.info("Task moved to Done - stopping loop")
+            self.state.state['stop_conditions']['task_in_done'] = True
+            return True
+        
+        # Check max iterations
+        if self.state.state['iteration'] >= self.state.state['max_iterations']:
+            logger.warning("Max iterations reached - stopping loop")
+            self.state.state['stop_conditions']['max_iterations_reached'] = True
+            return True
+        
+        # Check failure threshold
+        if self.state.state['consecutive_failures'] >= self.state.state['failure_threshold']:
+            logger.error("Failure threshold exceeded - stopping loop")
+            self.state.state['stop_conditions']['failure_threshold_exceeded'] = True
+            return True
+        
+        # Check stop hook
+        if self.stop_hook.check_stop_hook():
+            logger.info("Stop hook detected - stopping loop")
+            self.state.state['stop_conditions']['stop_hook_triggered'] = True
+            return True
+        
+        # Check manual intervention
+        if self.check_manual_intervention():
+            logger.info("Manual intervention requested - stopping loop")
+            self.state.state['stop_conditions']['manual_intervention'] = True
+            return True
+        
+        return False
+    
+    async def execute_iteration(self):
+        """Execute one loop iteration"""
+        
+        iteration = self.state.state['iteration']
+        logger.info(f"Executing iteration {iteration}")
+        
+        # Reinject prompt if needed
+        if self.reinjector.should_reinject(iteration):
+            prompt = self.reinjector.generate_reinjection_prompt()
+            logger.info("Reinjecting context prompt")
+            # Send prompt to AI agent
+            await self.send_prompt(prompt)
+        
+        # Get current step
+        current_step = self.get_current_step()
+        
+        if not current_step:
+            logger.info("No more steps - task complete")
+            await self.move_task_to_done()
+            return
+        
+        # Execute step
+        try:
+            result = await self.execute_step(current_step)
+            
+            if result.success:
+                self.state.record_success(current_step)
+                logger.info(f"Step {current_step.id} completed successfully")
+            else:
+                self.state.record_failure(current_step, result.error)
+                logger.warning(f"Step {current_step.id} failed: {result.error}")
+                
+        except Exception as e:
+            self.state.record_failure(current_step, e)
+            logger.error(f"Step {current_step.id} error: {e}")
+    
+    def check_task_in_done(self):
+        """Check if task file is in Done folder"""
+        task_path = self.state.state['task_path']
+        return '/Done/' in task_path or not os.path.exists(task_path)
+    
+    def check_manual_intervention(self):
+        """Check if task moved to Needs_Action"""
+        task_path = self.state.state['task_path']
+        return '/Needs_Action/' in task_path
+    
+    async def move_task_to_done(self):
+        """Move task to Done folder"""
+        task_path = self.state.state['task_path']
+        done_path = task_path.replace('/Specs/', '/Done/')
+        
+        os.makedirs(os.path.dirname(done_path), exist_ok=True)
+        shutil.move(task_path, done_path)
+        
+        self.state.state['task_path'] = done_path
+        self.state.save_state()
+        
+        logger.info(f"Task moved to Done: {done_path}")
+    
+    async def handle_completion(self):
+        """Handle loop completion"""
+        
+        stop_conditions = self.state.state['stop_conditions']
+        
+        if stop_conditions['task_in_done']:
+            # Success - task completed
+            logger.info("Loop completed successfully")
+            await self.create_completion_report()
+        
+        elif stop_conditions['max_iterations_reached']:
+            # Warning - max iterations
+            logger.warning("Loop stopped: max iterations reached")
+            await self.create_intervention_request(
+                "Max iterations reached. Task may need human review."
+            )
+        
+        elif stop_conditions['failure_threshold_exceeded']:
+            # Error - too many failures
+            logger.error("Loop stopped: failure threshold exceeded")
+            await self.escalate_to_human(
+                "Too many consecutive failures. Human intervention required."
+            )
+        
+        elif stop_conditions['stop_hook_triggered']:
+            # Manual stop
+            logger.info("Loop stopped: stop hook triggered")
+            # State already saved, just log
+        
+        elif stop_conditions['manual_intervention']:
+            # Human requested intervention
+            logger.info("Loop stopped: manual intervention requested")
+            # Wait for human guidance
+    
+    async def create_completion_report(self):
+        """Create completion report"""
+        
+        state = self.state.state
+        
+        report = f"""---
+type: completion_report
+task_id: {self.task_id}
+completed_at: {datetime.now().isoformat()}
+---
+
+# Task Completion Report
+
+## Summary
+**Task**: {state['task_path']}
+**Status**: ✅ COMPLETED
+**Duration**: {state['metrics']['total_duration_seconds']} seconds
+**Iterations**: {state['iteration']}
+
+## Statistics
+- **Total Steps**: {len(state['completed_steps']) + len(state['failed_steps'])}
+- **Completed**: {len(state['completed_steps'])}
+- **Failed**: {len(state['failed_steps'])}
+- **Success Rate**: {state['metrics']['success_rate']:.0%}
+
+## Completed Steps
+{self.format_steps(state['completed_steps'])}
+
+## Failed Steps (Recovered)
+{self.format_steps(state['failed_steps'])}
+
+## Metrics
+- **Average Step Duration**: {state['metrics']['average_step_duration']}s
+- **Total Successes**: {state['total_successes']}
+- **Total Failures**: {state['total_failures']}
+
+---
+
+**Task successfully completed and moved to /Done/**
+"""
+        
+        report_path = f"/Logs/completion_reports/{self.task_id}.md"
+        os.makedirs(os.path.dirname(report_path), exist_ok=True)
+        with open(report_path, 'w') as f:
+            f.write(report)
+    
+    async def create_intervention_request(self, reason):
+        """Create intervention request"""
+        
+        request = f"""---
+type: intervention_request
+task_id: {self.task_id}
+created: {datetime.now().isoformat()}
+reason: max_iterations
+---
+
+# Intervention Request
+
+## Reason
+{reason}
+
+## Current Status
+**Iteration**: {self.state.state['iteration']}/{self.state.state['max_iterations']}
+**Success Rate**: {self.state.state['metrics']['success_rate']:.0%}
+**Current Step**: {self.state.state['current_step']['description']}
+
+## Options
+- [ ] Increase max iterations and resume
+- [ ] Review progress and provide guidance
+- [ ] Mark task as complete
+- [ ] Cancel task
+
+## State File
+State saved at: `.state/autonomous_loop_{self.task_id}.json`
+
+---
+
+**Please review and decide how to proceed.**
+"""
+        
+        request_path = f"/Needs_Action/intervention_{self.task_id}.md"
+        with open(request_path, 'w') as f:
+            f.write(request)
+    
+    async def escalate_to_human(self, reason):
+        """Escalate to human"""
+        
+        escalation = f"""---
+type: escalation
+task_id: {self.task_id}
+created: {datetime.now().isoformat()}
 priority: high
 ---
 
-# Reinjected Prompt
+# 🚨 Task Escalation
 
-## Additional Context
+## Reason
+{reason}
 
-The authentication approach has changed. We're now using OAuth2 instead of JWT.
+## Failure Details
+**Consecutive Failures**: {self.state.state['consecutive_failures']}
+**Failure Threshold**: {self.state.state['failure_threshold']}
 
-## Updated Instructions
+## Recent Failures
+{self.format_recent_failures()}
 
-1. Replace JWT implementation with OAuth2
-2. Use the `oauth2-library` package
-3. Update tests to match new approach
-4. Ensure backward compatibility
+## Current Step
+**Step**: {self.state.state['current_step']['step_id']}
+**Description**: {self.state.state['current_step']['description']}
 
-## References
+## Recommended Actions
+1. Review error logs
+2. Identify root cause
+3. Provide guidance or fix issue
+4. Resume loop or cancel task
 
-- [[Specs/auth_feature_updated.md]]
-- [[Docs/oauth2_guide.md]]
+## State File
+`.state/autonomous_loop_{self.task_id}.json`
 
 ---
 
-**This prompt will be injected into the next iteration.**
-
-Delete this file after it's been processed.
+**Human intervention required to proceed.**
+"""
+        
+        escalation_path = f"/Needs_Action/escalation_{self.task_id}.md"
+        with open(escalation_path, 'w') as f:
+            f.write(escalation)
 ```
 
-### Prompt Reinjection Logic
+## Configuration
 
-```python
-def check_reinject_prompt(self):
-    """Check for prompt reinjection"""
-    
-    # Only check every N iterations
-    if self.iteration % self.config.check_reinject_every_n_iterations != 0:
-        return None
-    
-    reinject_path = self.config.reinject_prompt_file
-    
-    if os.path.exists(reinject_path):
-        # Read prompt
-        with open(reinject_path, 'r') as f:
-            prompt = parse_markdown(f.read())
-        
-        logger.info("Prompt reinjection detected", {
-            "priority": prompt.get("priority", "normal"),
-            "created": prompt.get("created")
-        })
-        
-        # Delete file (consumed)
-        os.remove(reinject_path)
-        
-        # Return prompt for injection
-        return prompt
-    
-    return None
+```yaml
+# config/autonomous_loop.yaml
 
-def inject_prompt(self, prompt):
-    """Inject prompt into current context"""
-    
-    # Add to context
-    self.context["reinjected_prompt"] = prompt["content"]
-    self.context["reinjected_at"] = datetime.now().isoformat()
-    
-    # Log injection
-    logger.info("Prompt injected into context", {
-        "iteration": self.iteration,
-        "prompt_length": len(prompt["content"])
-    })
-    
-    # Update state
-    self.state["last_prompt_injection"] = {
-        "iteration": self.iteration,
-        "timestamp": datetime.now().isoformat(),
-        "prompt": prompt["content"][:200]  # First 200 chars
-    }
+autonomous_loop:
+  # Loop limits
+  max_iterations: 100
+  failure_threshold: 3
+  timeout_seconds: 3600
+  
+  # Reinjection settings
+  reinject_every_n_iterations: 10
+  reinject_after_failure: true
+  reinject_if_stale_seconds: 300
+  
+  # State management
+  state_directory: ".state"
+  save_state_every_iteration: true
+  backup_state_every_n_iterations: 10
+  
+  # Stop conditions
+  check_done_folder: true
+  check_needs_action_folder: true
+  check_stop_hook: true
+  
+  # Monitoring
+  log_every_iteration: true
+  create_progress_reports: true
+  progress_report_every_n_iterations: 25
+  
+  # Error handling
+  retry_failed_steps: true
+  max_step_retries: 3
+  exponential_backoff: true
+  
+  # Completion
+  auto_move_to_done: true
+  create_completion_report: true
+  archive_state_file: true
 ```
+
+## Usage
+
+### Starting a Loop
+
+```bash
+# Start autonomous loop for a task
+kiro loop start --task /Specs/auth_feature/tasks.md
+
+# Start with custom config
+kiro loop start --task /Specs/auth_feature/tasks.md --config custom.yaml
+
+# Start with max iterations
+kiro loop start --task /Specs/auth_feature/tasks.md --max-iterations 50
+
+# Start with failure threshold
+kiro loop start --task /Specs/auth_feature/tasks.md --failure-threshold 5
+```
+
+### Monitoring a Loop
+
+```bash
+# Check loop status
+kiro loop status --task-id task_20260215_103000
+
+# View state file
+kiro loop state --task-id task_20260215_103000
+
+# View progress
+kiro loop progress --task-id task_20260215_103000
+
+# Tail logs
+kiro loop logs --task-id task_20260215_103000 --follow
+```
+
+### Stopping a Loop
+
+```bash
+# Create stop hook
+kiro loop stop --task-id task_20260215_103000
+
+# Force stop
+kiro loop stop --task-id task_20260215_103000 --force
+
+# Stop and save state
+kiro loop stop --task-id task_20260215_103000 --save-state
+```
+
+### Resuming a Loop
+
+```bash
+# Resume from saved state
+kiro loop resume --task-id task_20260215_103000
+
+# Resume with new max iterations
+kiro loop resume --task-id task_20260215_103000 --max-iterations 150
+
+# Resume and reset failure count
+kiro loop resume --task-id task_20260215_103000 --reset-failures
+```
+
+## Monitoring
+
+### Progress Dashboard
+
+```markdown
+# Autonomous Loop Progress
+
+## Active Loops (2)
+
+### Task: auth_feature
+**Status**: 🟢 RUNNING
+**Iteration**: 15/100 (15%)
+**Success Rate**: 93%
+**Current Step**: 2.3 - Write unit tests
+**Duration**: 8 minutes
+**ETA**: 45 minutes
+
+### Task: payment_integration
+**Status**: 🟡 PAUSED (Stop Hook)
+**Iteration**: 42/100 (42%)
+**Success Rate**: 88%
+**Last Step**: 3.1 - Integrate payment API
+**Duration**: 22 minutes
+
+## Completed Today (3)
+
+### Task: email_templates
+**Status**: ✅ COMPLETED
+**Iterations**: 28/100
+**Success Rate**: 96%
+**Duration**: 15 minutes
+
+## Failed (1)
+
+### Task: database_migration
+**Status**: ❌ FAILED (Threshold Exceeded)
+**Iterations**: 67/100
+**Consecutive Failures**: 3
+**Reason**: Database connection errors
+**Action**: Escalated to human
+```
+
+## Correctness Properties
+
+### P-1: State Persistence
+**Property**: State is saved after every iteration  
+**Validation**: Check state file exists and is updated  
+**Test**: Kill process mid-iteration, verify state recoverable
+
+### P-2: Stop Condition Enforcement
+**Property**: Loop stops when any stop condition is met  
+**Validation**: Verify loop stops within 1 iteration of condition  
+**Test**: Trigger each stop condition, verify immediate stop
+
+### P-3: Failure Handling
+**Property**: Failures don't crash the loop  
+**Validation**: Inject failures, verify loop continues  
+**Test**: Cause step failures, verify recovery
+
+### P-4: Iteration Limit
+**Property**: Loop never exceeds max iterations  
+**Validation**: Check iteration count <= max  
+**Test**: Run loop to max iterations, verify stops
+
+### P-5: Progress Tracking
+**Property**: All steps are tracked in state  
+**Validation**: Compare executed steps to state file  
+**Test**: Execute steps, verify all recorded
+
+### P-6: Reinjection Effectiveness
+**Property**: Context is maintained across iterations  
+**Validation**: Check reinjected prompts contain current context  
+**Test**: Verify prompt content after reinjection
+
+## Security and Safety
+
+### Safety Measures
+
+1. **Iteration Limits**: Prevent infinite loops
+2. **Failure Thresholds**: Stop on repeated failures
+3. **Stop Hooks**: Human can stop anytime
+4. **State Persistence**: No data loss on interruption
+5. **Escalation**: Human intervention on critical failures
+
+### Resource Limits
+
+```yaml
+resource_limits:
+  max_memory_mb: 1024
+  max_cpu_percent: 80
+  max_disk_writes_per_minute: 100
+  max_api_calls_per_minute: 60
+```
+
+## Future Enhancements
+
+1. **Parallel Loops**: Run multiple tasks concurrently
+2. **Smart Reinjection**: Context-aware prompt generation
+3. **Adaptive Thresholds**: Adjust limits based on task complexity
+4. **Checkpoint System**: Save checkpoints for rollback
+5. **Loop Analytics**: Detailed performance analysis
+
+---
+
+**Status**: DRAFT  
+**Next Steps**:
+1. Review specification
+2. Approve autonomous loop design
+3. Implement core loop
+4. Test stop conditions
+5. Deploy with monitoring
 
