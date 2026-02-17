@@ -1,15 +1,35 @@
-# Spec Driven Agent Development
+# AI Employee System - Bronze Tier
 
-A systematic methodology for building AI Employees through formal specification, design, and property-based testing.
+A personal AI assistant that monitors Gmail, manages tasks, and maintains an Obsidian vault as its knowledge base.
 
-## Philosophy
+**Current Status**: 🥉 Bronze Tier Foundation  
+**Next Goal**: 🥈 Silver Tier (Multi-watcher + MCP)
 
-Spec Driven Development transforms rough ideas into production-ready AI capabilities through a structured workflow that emphasizes:
+## 🚀 Quick Start
 
-- **Formal Correctness**: Define what "correct" means before writing code
-- **Property-Based Testing**: Validate behavior across all inputs, not just examples
-- **Iterative Refinement**: Move fluidly between requirements, design, and implementation
-- **Ground Truth Validation**: User approval gates at each stage ensure alignment
+**👉 New here? Read `START_HERE.md` first!**
+
+Then follow these steps:
+
+1. **Install**: `pip install -r Skills/requirements.txt`
+2. **Setup Gmail API**: Get credentials from Google Cloud Console
+3. **Authenticate**: `python Skills/gmail_watcher.py auth`
+4. **Test**: `python Skills/gmail_watcher.py poll --dry-run`
+5. **Run**: `python Skills/gmail_watcher.py start`
+
+📖 **Guides**:
+- `START_HERE.md` - Begin your journey
+- `QUICK_START.md` - 30-minute setup
+- `BRONZE_TIER_SETUP.md` - Complete guide
+- `ARCHITECTURE_BRONZE.md` - How it works
+
+## What This Does
+
+- 📧 **Monitors Gmail** for important emails
+- 📝 **Creates task files** in Obsidian vault
+- 🤖 **Uses Claude Code** for reasoning and actions
+- ✅ **Human-in-the-loop** approval for sensitive actions
+- 📊 **Dashboard** for real-time status
 
 ## Workflow
 

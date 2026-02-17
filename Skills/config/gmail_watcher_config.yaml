@@ -6,18 +6,24 @@ pollingIntervalMs: 300000
 
 # Importance criteria for filtering emails
 importanceCriteria:
-  # Whitelist of sender email addresses
+  # Whitelist of sender email addresses (Add your important contacts)
   senderWhitelist:
     - "boss@company.com"
     - "client@important.com"
+    - "hr@company.com"
+    - "finance@company.com"
   
-  # Keywords to search for in subject/body
+  # Keywords to search for in subject/body (Add your important keywords)
   keywordPatterns:
     - "urgent"
     - "important"
     - "action required"
     - "deadline"
     - "asap"
+    - "invoice"
+    - "payment"
+    - "meeting"
+    - "project"
   
   # Gmail labels that indicate importance
   requiredLabels:

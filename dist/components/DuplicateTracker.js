@@ -59,6 +59,9 @@ export class DuplicateTracker {
      * Saves the current index to disk
      */
     async saveIndex() {
+        // Ensure the directory exists
+        const dir = path.dirname(this.indexPath);
+        await fs.mkdir(dir, { recursive: true });
         const serialized = this.serializeIndex(this.index);
         await fs.writeFile(this.indexPath, JSON.stringify(serialized, null, 2), 'utf-8');
     }
