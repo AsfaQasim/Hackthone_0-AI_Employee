@@ -14,7 +14,7 @@ import json
 import time
 import logging
 import argparse
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Any
 from dataclasses import dataclass, asdict
@@ -459,7 +459,7 @@ subject: "{email.subject}"
 date: "{email.date}"
 priority: "{email.priority}"
 labels: {json.dumps(email.labels)}
-processed_at: "{datetime.utcnow().isoformat()}Z"
+processed_at: "{datetime.now(UTC).isoformat()}Z"
 source: "gmail"
 type: "email_task"
 status: "pending"
@@ -495,7 +495,7 @@ status: "pending"
     def create_markdown_file(self, email: EmailMetadata, content: str) -> Optional[str]:
         """Create markdown file in Needs_Action folder"""
         # Generate filename
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         safe_subject = re.sub(r'[^\w\s-]', '', email.subject.lower())
         safe_subject = re.sub(r'[-\s]+', '-', safe_subject)[:50]
         filename = f"{timestamp}_{safe_subject}.md"
@@ -572,7 +572,7 @@ status: "pending"
             # Update processed index
             self.processed_index[email_id] = {
                 "filename": Path(filepath).name,
-                "processedAt": datetime.utcnow().isoformat() + "Z",
+                "processedAt": datetime.now(UTC).isoformat() + "Z",
                 "priority": priority.value
             }
             self._save_processed_index()
