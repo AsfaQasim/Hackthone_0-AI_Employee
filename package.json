@@ -11,7 +11,8 @@
     "test:property": "vitest run --grep Property",
     "test:coverage": "vitest run --coverage",
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "dashboard": "node server.js"
   },
   "keywords": [
     "gmail",
@@ -32,6 +33,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "express": "^4.22.1",
     "js-yaml": "^4.1.1",
     "turndown": "^7.2.2"
   }

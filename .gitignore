@@ -37,3 +37,26 @@ Thumbs.db
 
 # Obsidian
 .obsidian/
+
+# Testing
+.pytest_cache/
+.hypothesis/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# WhatsApp session
+config/whatsapp_session/
+
+# Vault content (keep structure, not content)
+Inbox/*.md
+Needs_Action/*.md
+Done/*.md
+Plans/*.md
+Pending_Approval/*.md
+Approved/*.md
+
+# Keep .gitkeep files
+!**/.gitkeep
